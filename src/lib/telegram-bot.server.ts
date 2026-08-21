@@ -45,6 +45,19 @@ export async function tg(method: string, body: unknown) {
   return data;
 }
 
+/** Same as `tg`, but sends multipart form data (file uploads). */
+export async function tgForm(method: string, form: FormData) {
+  const res = await fetch(`https://api.telegram.org/bot${token()}/${method}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await res.json()) as { ok: boolean; result?: any; description?: string };
+  if (!data.ok) {
+    console.error(`Telegram ${method} failed [${res.status}]: ${data.description}`);
+  }
+  return data;
+}
+
 export function isAdmin(userId: number | undefined) {
   if (!userId) return false;
   const ids = (process.env["MUSIC_TELEGRAM_ADMIN_IDS"] ?? "")
