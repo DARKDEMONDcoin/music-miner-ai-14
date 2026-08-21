@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getPost, PLAN_LENGTH } from "@/lib/content-plan";
 import { BRAND_IMAGE_STYLE } from "@/lib/brand";
+import { lovableImage, dataUrlToBytes } from "@/lib/lovable-image.server";
 
 export const APP_URL =
   process.env["MUSIC_APP_URL"] ??
