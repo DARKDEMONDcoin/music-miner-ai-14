@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getPost, PLAN_LENGTH } from "@/lib/content-plan";
 import { BRAND_IMAGE_STYLE } from "@/lib/brand";
+import { lovableImage, dataUrlToBytes } from "@/lib/lovable-image.server";
 
 export const APP_URL =
   process.env["MUSIC_APP_URL"] ??
@@ -44,6 +45,19 @@ export async function tg(method: string, body: unknown) {
   return data;
 }
 
+/** Same as `tg`, but sends multipart form data (file uploads). */
+export async function tgForm(method: string, form: FormData) {
+  const res = await fetch(`https://api.telegram.org/bot${token()}/${method}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await res.json()) as { ok: boolean; result?: any; description?: string };
+  if (!data.ok) {
+    console.error(`Telegram ${method} failed [${res.status}]: ${data.description}`);
+  }
+  return data;
+}
+
 export function isAdmin(userId: number | undefined) {
   if (!userId) return false;
   const ids = (process.env["MUSIC_TELEGRAM_ADMIN_IDS"] ?? "")
@@ -81,22 +95,25 @@ export async function setState(patch: Partial<BotState>) {
 
 async function cover(prompt: string): Promise<string | null> {
   const key = process.env["DEEPAI_API_KEY"];
-  if (!key) return null;
-  try {
-    const form = new FormData();
-    form.set("text", `${prompt}, ${BRAND_IMAGE_STYLE}`);
-    const res = await fetch("https://api.deepai.org/api/text2img", {
-      method: "POST",
-      headers: { "api-key": key },
-      body: form,
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { output_url?: string };
-    return data.output_url ?? null;
-  } catch (e) {
-    console.error("DeepAI cover failed", e);
-    return null;
+  if (key) {
+    try {
+      const form = new FormData();
+      form.set("text", `${prompt}, ${BRAND_IMAGE_STYLE}`);
+      const res = await fetch("https://api.deepai.org/api/text2img", {
+        method: "POST",
+        headers: { "api-key": key },
+        body: form,
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { output_url?: string };
+        if (data.output_url) return data.output_url;
+      }
+    } catch (e) {
+      console.error("DeepAI cover failed", e);
+    }
   }
+  // No usable DeepAI key: fall back to the Lovable AI Gateway.
+  return lovableImage(`${prompt}, ${BRAND_IMAGE_STYLE}`);
 }
 
 /** Publishes the next post of the 90-day plan to the channel. */
@@ -112,20 +129,34 @@ export async function publishNext() {
   };
 
 
-  const sent = image
-    ? await tg("sendPhoto", {
-        chat_id: channel,
-        photo: image,
-        caption: post.caption,
-        parse_mode: "Markdown",
-        reply_markup,
-      })
-    : await tg("sendMessage", {
-        chat_id: channel,
-        text: post.caption,
-        parse_mode: "Markdown",
-        reply_markup,
-      });
+  const bytes = image?.startsWith("data:") ? dataUrlToBytes(image) : null;
+
+  let sent: { ok: boolean; result?: any; description?: string };
+  if (bytes) {
+    // Generated images come back inline, so upload them as a file.
+    const form = new FormData();
+    form.set("chat_id", String(channel));
+    form.set("caption", post.caption);
+    form.set("parse_mode", "Markdown");
+    form.set("reply_markup", JSON.stringify(reply_markup));
+    form.set("photo", new Blob([bytes.bytes.slice().buffer as ArrayBuffer], { type: bytes.type }), "cover.png");
+    sent = await tgForm("sendPhoto", form);
+  } else if (image) {
+    sent = await tg("sendPhoto", {
+      chat_id: channel,
+      photo: image,
+      caption: post.caption,
+      parse_mode: "Markdown",
+      reply_markup,
+    });
+  } else {
+    sent = await tg("sendMessage", {
+      chat_id: channel,
+      text: post.caption,
+      parse_mode: "Markdown",
+      reply_markup,
+    });
+  }
 
   if (!sent.ok) return { ok: false, error: sent.description, post };
 
@@ -133,7 +164,9 @@ export async function publishNext() {
     day_index: state.day_index,
     title: post.title,
     message_id: sent.result?.message_id ?? null,
-    image_url: image,
+    image_url: bytes
+      ? (sent.result?.photo?.at(-1)?.file_id ?? null)
+      : image,
   });
 
   await setState({
