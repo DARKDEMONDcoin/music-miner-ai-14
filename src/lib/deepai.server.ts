@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { lovableImage } from "@/lib/lovable-image.server";
 
 /**
  * DeepAI image generation with a rotating pool of API keys.
