@@ -116,20 +116,34 @@ export async function publishNext() {
   };
 
 
-  const sent = image
-    ? await tg("sendPhoto", {
-        chat_id: channel,
-        photo: image,
-        caption: post.caption,
-        parse_mode: "Markdown",
-        reply_markup,
-      })
-    : await tg("sendMessage", {
-        chat_id: channel,
-        text: post.caption,
-        parse_mode: "Markdown",
-        reply_markup,
-      });
+  const bytes = image?.startsWith("data:") ? dataUrlToBytes(image) : null;
+
+  let sent: { ok: boolean; result?: any; description?: string };
+  if (bytes) {
+    // Generated images come back inline, so upload them as a file.
+    const form = new FormData();
+    form.set("chat_id", String(channel));
+    form.set("caption", post.caption);
+    form.set("parse_mode", "Markdown");
+    form.set("reply_markup", JSON.stringify(reply_markup));
+    form.set("photo", new Blob([bytes.bytes], { type: bytes.type }), "cover.png");
+    sent = await tgForm("sendPhoto", form);
+  } else if (image) {
+    sent = await tg("sendPhoto", {
+      chat_id: channel,
+      photo: image,
+      caption: post.caption,
+      parse_mode: "Markdown",
+      reply_markup,
+    });
+  } else {
+    sent = await tg("sendMessage", {
+      chat_id: channel,
+      text: post.caption,
+      parse_mode: "Markdown",
+      reply_markup,
+    });
+  }
 
   if (!sent.ok) return { ok: false, error: sent.description, post };
 
@@ -137,7 +151,9 @@ export async function publishNext() {
     day_index: state.day_index,
     title: post.title,
     message_id: sent.result?.message_id ?? null,
-    image_url: image,
+    image_url: bytes
+      ? (sent.result?.photo?.at(-1)?.file_id ?? null)
+      : image,
   });
 
   await setState({
