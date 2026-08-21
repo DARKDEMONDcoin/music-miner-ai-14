@@ -139,7 +139,7 @@ export async function publishNext() {
     form.set("caption", post.caption);
     form.set("parse_mode", "Markdown");
     form.set("reply_markup", JSON.stringify(reply_markup));
-    form.set("photo", new Blob([bytes.bytes], { type: bytes.type }), "cover.png");
+    form.set("photo", new Blob([bytes.bytes as unknown as ArrayBufferView], { type: bytes.type }), "cover.png");
     sent = await tgForm("sendPhoto", form);
   } else if (image) {
     sent = await tg("sendPhoto", {
