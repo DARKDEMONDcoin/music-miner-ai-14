@@ -81,22 +81,25 @@ export async function setState(patch: Partial<BotState>) {
 
 async function cover(prompt: string): Promise<string | null> {
   const key = process.env["DEEPAI_API_KEY"];
-  if (!key) return null;
-  try {
-    const form = new FormData();
-    form.set("text", `${prompt}, ${BRAND_IMAGE_STYLE}`);
-    const res = await fetch("https://api.deepai.org/api/text2img", {
-      method: "POST",
-      headers: { "api-key": key },
-      body: form,
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { output_url?: string };
-    return data.output_url ?? null;
-  } catch (e) {
-    console.error("DeepAI cover failed", e);
-    return null;
+  if (key) {
+    try {
+      const form = new FormData();
+      form.set("text", `${prompt}, ${BRAND_IMAGE_STYLE}`);
+      const res = await fetch("https://api.deepai.org/api/text2img", {
+        method: "POST",
+        headers: { "api-key": key },
+        body: form,
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { output_url?: string };
+        if (data.output_url) return data.output_url;
+      }
+    } catch (e) {
+      console.error("DeepAI cover failed", e);
+    }
   }
+  // No usable DeepAI key: fall back to the Lovable AI Gateway.
+  return lovableImage(`${prompt}, ${BRAND_IMAGE_STYLE}`);
 }
 
 /** Publishes the next post of the 90-day plan to the channel. */
