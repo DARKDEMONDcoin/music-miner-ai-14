@@ -152,5 +152,5 @@ export async function deepaiImage(prompt: string, style = CLEAN_STYLE): Promise<
       await bump(row, false);
     }
   }
-  return null;
+  return lovableImage(`${prompt}, ${style}`);
 }
