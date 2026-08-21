@@ -6,7 +6,7 @@ export const Route = createFileRoute("/api/public/config")({
     handlers: {
       GET: async () =>
         Response.json({
-          adsgramBlockId: process.env["ADSGRAM_BLOCK_ID"] ?? "int-14003",
+          adsgramBlockId: process.env["ADSGRAM_BLOCK_ID"] ?? "43800",
         }),
     },
   },
