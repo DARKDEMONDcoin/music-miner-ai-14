@@ -112,7 +112,7 @@ const CLEAN_STYLE =
 /** Generates an image and returns its URL, rotating keys until one succeeds. */
 export async function deepaiImage(prompt: string, style = CLEAN_STYLE): Promise<string | null> {
   const keys = await activeKeys();
-  if (keys.length === 0) return null;
+  if (keys.length === 0) return lovableImage(`${prompt}, ${style}`);
 
   for (const row of keys) {
     try {
