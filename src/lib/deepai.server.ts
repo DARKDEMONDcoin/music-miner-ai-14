@@ -25,7 +25,9 @@ function db() {
 }
 
 export async function listKeys() {
-  const { data } = await db()
+  const client = db();
+  if (!client) return [];
+  const { data } = await client
     .from("music_deepai_keys")
     .select("id, label, active, disabled_reason, calls, failures, created_at")
     .order("created_at", { ascending: true });
@@ -40,7 +42,9 @@ export async function listKeys() {
 }
 
 export async function addKey(apiKey: string, label?: string) {
-  const { error } = await db()
+  const client = db();
+  if (!client) throw new Error("Supabase service role is not configured");
+  const { error } = await client
     .from("music_deepai_keys")
     .upsert(
       { api_key: apiKey.trim(), label: label ?? null, active: true, disabled_reason: null },
@@ -50,13 +54,30 @@ export async function addKey(apiKey: string, label?: string) {
 }
 
 async function activeKeys(): Promise<KeyRow[]> {
-  const { data } = await db()
-    .from("music_deepai_keys")
-    .select("id, api_key, calls, failures")
-    .eq("active", true)
-    .order("calls", { ascending: true })
-    .limit(20);
-  const rows = (data ?? []) as KeyRow[];
+  const client = db();
+  const rows: KeyRow[] = [];
+  if (client) {
+    const { data } = await client
+      .from("music_deepai_keys")
+      .select("id, api_key, calls, failures")
+      .eq("active", true)
+      .order("calls", { ascending: true })
+      .limit(20);
+    rows.push(...((data ?? []) as KeyRow[]));
+
+    // Shared key pool used across the account's projects.
+    const { data: shared } = await client
+      .from("api_keys")
+      .select("id, api_key")
+      .in("service", ["deapi", "deepai"])
+      .eq("is_active", true)
+      .limit(20);
+    for (const row of (shared ?? []) as { id: string; api_key: string }[]) {
+      if (!rows.some((r) => r.api_key === row.api_key)) {
+        rows.push({ id: "shared", api_key: row.api_key, calls: 0, failures: 0 });
+      }
+    }
+  }
   const fallback = process.env["DEEPAI_API_KEY"];
   if (fallback && !rows.some((r) => r.api_key === fallback)) {
     rows.push({ id: "env", api_key: fallback, calls: 0, failures: 0 });
@@ -65,13 +86,17 @@ async function activeKeys(): Promise<KeyRow[]> {
 }
 
 async function disable(id: string, reason: string) {
-  if (id === "env") return;
-  await db().from("music_deepai_keys").update({ active: false, disabled_reason: reason }).eq("id", id);
+  if (id === "env" || id === "shared") return;
+  const client = db();
+  if (!client) return;
+  await client.from("music_deepai_keys").update({ active: false, disabled_reason: reason }).eq("id", id);
 }
 
 async function bump(row: KeyRow, ok: boolean) {
-  if (row.id === "env") return;
-  await db()
+  if (row.id === "env" || row.id === "shared") return;
+  const client = db();
+  if (!client) return;
+  await client
     .from("music_deepai_keys")
     .update({
       calls: row.calls + 1,
