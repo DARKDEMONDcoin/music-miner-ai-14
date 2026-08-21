@@ -1,6 +1,6 @@
 /** Minimal Adsgram (sad.adsgram.ai) rewarded-ad integration. */
 
-let blockId = (import.meta.env["VITE_ADSGRAM_BLOCK_ID"] as string | undefined) ?? "int-14003";
+let blockId = (import.meta.env["VITE_ADSGRAM_BLOCK_ID"] as string | undefined) ?? "43800";
 
 async function resolveBlockId() {
   try {
